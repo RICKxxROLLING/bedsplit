@@ -32,6 +32,13 @@
 
   <aside class="panel">
     <section class="sec">
+      <div class="seg two" role="radiogroup" aria-label="What to make">
+        <label><input type="radio" name="app" id="app-split" value="split" checked><span>Split for bed</span></label>
+        <label><input type="radio" name="app" id="app-mold" value="mold"><span>Make a mold</span></label>
+      </div>
+    </section>
+
+    <section class="sec">
       <h2>Model</h2>
       <label class="drop" for="file">
         <strong>Open STL, OBJ or 3MF</strong>
@@ -50,8 +57,8 @@
         <button id="rz" class="ax-z" title="Rotate 90° about Z">Z</button>
         <button id="sample" title="Load the sample model">Sample</button>
       </div>
-      <label class="check"><input type="checkbox" id="shell"> Hollow into a shell before splitting</label>
-      <div id="shellFields" style="display:grid;gap:8px" hidden>
+      <label class="check split-only"><input type="checkbox" id="shell"> Hollow into a shell before splitting</label>
+      <div id="shellFields" class="split-only" style="display:grid;gap:8px" hidden>
         <label class="f">Wall thickness, mm<input type="number" id="shellw" value="6" min="3" max="30" step="0.5"></label>
         <p class="hint">Keeps a solid outer wall and removes the inside, so big models print as rings and panels instead of solid blocks. Joints shrink to fit inside the wall.</p>
         <p class="hint" id="shellInfo"></p>
@@ -69,7 +76,28 @@
       <label class="f">Safety margin per side, mm<input type="number" id="margin" value="3" min="0" step="0.5"></label>
     </section>
 
-    <section class="sec">
+    <section class="sec mold-only" id="moldSec" hidden>
+      <h2>Mold <span class="aux" id="moldaux"></span></h2>
+      <p class="hint">Builds a block with your model as a hollow inside, cut into parts that lock together on keys. Clamp the parts, pour silicone or epoxy into the funnel, then open the mold to get a cast of the model.</p>
+      <div class="fields">
+        <label class="f">Wall thickness, mm<input type="number" id="mwall" value="10" min="4" max="60" step="1"></label>
+        <label class="f">Parting plane<select id="maxis"><option value="2">Z (top / bottom)</option><option value="0">X (left / right)</option><option value="1">Y (front / back)</option></select></label>
+      </div>
+      <div class="cut mcut"><input type="range" id="mat" min="0" max="100" step="0.5" value="50" aria-label="Parting plane position"><output for="mat" id="matOut"></output></div>
+      <div class="row"><span class="hint" id="matHint" style="margin-right:auto">At the model’s widest section</span><button id="mauto" type="button">Widest</button></div>
+      <label class="check"><input type="checkbox" id="mquad"> Cut into 4 parts (for undercuts)</label>
+      <div class="fields">
+        <label class="f">Key diameter, mm<input type="number" id="mkey" value="6" min="3" max="20" step="0.5"></label>
+        <label class="f">Key clearance, mm<input type="number" id="mclr" value="0.2" min="0" max="1" step="0.05"></label>
+        <label class="f">Funnel diameter, mm<input type="number" id="msprue" value="8" min="3" max="30" step="0.5"></label>
+        <label class="f">Air vents<input type="number" id="mvents" value="3" min="0" max="12" step="1"></label>
+      </div>
+      <p class="hint">Pours from the top (+Z). Turn the model with Rotate so the side where a funnel stub is easiest to trim faces up.</p>
+      <div class="plan" id="moldsum"></div>
+      <button class="primary big" id="makeMold">Make mold</button>
+    </section>
+
+    <section class="sec split-only">
       <h2>Joints</h2>
       <div class="seg four" role="radiogroup" aria-label="Joint type">
         <label><input type="radio" name="jt" id="jt-peg" value="peg" checked><span>Pegs</span></label>
@@ -90,7 +118,7 @@
       </div>
     </section>
 
-    <section class="sec">
+    <section class="sec split-only">
       <h2>Cuts <span class="aux" id="gridaux"></span></h2>
       <div class="seg two" role="radiogroup" aria-label="Cut mode">
         <label><input type="radio" name="mode" id="mode-adaptive" value="adaptive" checked><span>Fewest parts</span></label>
@@ -113,13 +141,14 @@
       <div id="warns" style="display:grid;gap:6px"></div>
       <div class="parts" id="parts"></div>
       <button class="big" id="export" disabled>Download parts (.zip)</button>
-      <p class="hint">The zip holds one STL per part, a single 3MF with every part (press A in Bambu Studio to arrange across plates), printable pins or dovetail keys when needed, and an assembly sheet with the build order.</p>
+      <p class="hint mold-only" hidden>The zip holds each mold part as an STL turned with its parting face up (so the cavity prints as an open pit, no supports), a 3MF with every part, and a sheet with casting steps and how much resin to mix.</p>
+      <p class="hint split-only">The zip holds one STL per part, a single 3MF with every part (press A in Bambu Studio to arrange across plates), printable pins or dovetail keys when needed, and an assembly sheet with the build order.</p>
       <div class="supplies" id="supplies" hidden></div>
     </section>
     <section class="sec adsec" id="adSide" hidden aria-label="Advertisement"></section>
     <footer class="sitefoot">
       <a href="/guides/">Guides</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/licenses.html">Licenses</a>
-      <p>Your models never leave your computer. All splitting happens in your browser.</p>
+      <p>Your models never leave your computer. All splitting and mold making happens in your browser.</p>
     </footer>
   </aside>
 
@@ -151,6 +180,7 @@
 <script src="/vendor/3MFLoader.js"></script>
 <script src="/config.js"></script>
 <script src="/js/splitter.js"></script>
+<script src="/js/mold.js"></script>
 <script src="/js/monetize.js"></script>
 <script src="/js/app.js"></script>
 </body>

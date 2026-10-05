@@ -87,7 +87,7 @@
     const el = $('supplies'); if (!el) return;
     const list = (C.supplies || []).filter(s => hasAff(s.url) && (!s.joints || s.joints.includes(d.joint)));
     if (!list.length || d.parts < 2) { el.hidden = true; return; }
-    el.innerHTML = `<h3>For assembly</h3><ul>${list.map(s => `<li>${link(s.label, s.url)}</li>`).join('')}</ul>${DISCLOSE}`;
+    el.innerHTML = `<h3>${d.joint === 'mold' ? 'For casting' : 'For assembly'}</h3><ul>${list.map(s => `<li>${link(s.label, s.url)}</li>`).join('')}</ul>${DISCLOSE}`;
     el.hidden = false;
   }
 

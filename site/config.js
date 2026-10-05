@@ -21,10 +21,14 @@ window.BEDSPLIT_CONFIG = {
     { name: 'Elegoo OrangeStorm Giga', bed: [800, 800, 1000], url: 'https://www.amazon.com/s?k=Elegoo+OrangeStorm+Giga' }
   ],
 
-  // Shown under the parts list after a split. joints: which joint types it applies to.
+  // Shown under the parts list after a split. joints: which joint types it applies to ('mold' = mold mode).
   supplies: [
     { label: 'Medium CA glue + activator', url: 'https://www.amazon.com/s?k=medium+CA+glue+activator', joints: ['peg', 'dowel', 'flat'] },
     { label: 'Wooden dowel pins (for dowel holes)', url: 'https://www.amazon.com/s?k=wooden+dowel+pins+8mm', joints: ['dowel'] },
-    { label: 'PLA filament', url: 'https://www.amazon.com/s?k=PLA+filament+1kg', joints: ['peg', 'dowel', 'flat'] }
+    { label: 'PLA filament', url: 'https://www.amazon.com/s?k=PLA+filament+1kg', joints: ['peg', 'dowel', 'flat'] },
+    { label: 'Mold release spray', url: 'https://www.amazon.com/s?k=ease+release+200', joints: ['mold'] },
+    { label: 'Casting epoxy resin', url: 'https://www.amazon.com/s?k=casting+epoxy+resin', joints: ['mold'] },
+    { label: 'Mold-making silicone', url: 'https://www.amazon.com/s?k=mold+making+silicone+rubber', joints: ['mold'] },
+    { label: 'XTC-3D print coating', url: 'https://www.amazon.com/s?k=XTC-3D', joints: ['mold'] }
   ]
 };

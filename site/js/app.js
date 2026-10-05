@@ -16,12 +16,13 @@
   const PALETTE = ['#E07A5F', '#3D85B8', '#6FB08F', '#E9B949', '#9C7FC4', '#4FB0AA', '#D6823C', '#7F93A6', '#C4677F', '#8DA84A'];
 
   const emit = (name, detail) => { try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch (e) {} };
-  const st = { base: null, name: 'sample', R: [1, 0, 0, 0, 1, 0, 0, 0, 1], work: null, bb: null, cuts: [[], [], []], result: null, parts: [], sel: -1, stale: false, busy: false, plan: null, planToken: 0, planning: false };
+  const st = { base: null, name: 'sample', R: [1, 0, 0, 0, 1, 0, 0, 0, 1], work: null, bb: null, cuts: [[], [], []], result: null, parts: [], sel: -1, stale: false, busy: false, plan: null, planToken: 0, planning: false, moldAt: [null, null, null], moldWide: [null, null, null] };
   const mode = () => document.querySelector('input[name=mode]:checked').value;
-  const adaptive = () => mode() === 'adaptive';
+  const moldOn = () => document.querySelector('input[name=app]:checked').value === 'mold';
+  const adaptive = () => mode() === 'adaptive' && !moldOn();
   const usable = () => { const m = +$('margin').value || 0; return bed().map(x => Math.max(10, x - 2 * m)); };
   const curMesh = () => (adaptive() && st.plan) ? st.plan.work : st.work;
-  const curBB = () => (adaptive() && st.plan) ? st.plan.bb : st.bb;
+  const curBB = () => moldOn() && st.bb ? moldBB() : (adaptive() && st.plan) ? st.plan.bb : st.bb;
 
   // ---------- UI setup ----------
   const bedSel = $('bed');
@@ -35,7 +36,7 @@
   const jtype = () => document.querySelector('input[name=jt]:checked').value;
   let joint = () => ({ type: jtype(), d: +$('jd').value || 8, len: +$('jlen').value || 10, clr: Math.max(0, +$('jclr').value || 0), wall: +$('jwall').value || 2.5, maxPer: Math.max(1, Math.round(+$('jmax').value || 3)),
     dw: Math.max(4, +$('dw').value || 10), dh: Math.min(15, Math.max(2, +$('dh').value || 5)), keysOnly: $('dkeys').checked });
-  const shellOn = () => $('shell').checked;
+  const shellOn = () => !moldOn() && $('shell').checked;
   const shellWall = () => Math.min(30, Math.max(3, +$('shellw').value || 6));
   // in a shell, connectors shrink to sit inside the wall with at least ~1.2 mm of plastic round them
   const jointRaw = joint;
@@ -57,6 +58,21 @@
   const FLAT = { type: 'flat' };
   const faceName = (pr) => pr ? (pr.s > 0 ? '+' : '−') + 'XYZ'[pr.k] : '';
   const fmt = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toFixed(d);
+
+  // ---------- mold settings ----------
+  const moldWall = () => Math.min(60, Math.max(4, +$('mwall').value || 10));
+  const moldAxis = () => +$('maxis').value;
+  const moldBB = () => { const w = moldWall(), s = st.bb.size; return { min: [-w, -w, -w], max: s.map(x => x + w), size: s.map(x => x + 2 * w) }; };
+  // parting position per axis; null = the model's widest section (found once per model and axis)
+  const moldAt = () => { const k = moldAxis(); if (st.moldAt[k] != null) return st.moldAt[k]; if (st.moldWide[k] == null) st.moldWide[k] = Mold.autoParting(st.work, k); return st.moldWide[k]; };
+  const moldOpts = () => ({ wall: moldWall(), axis: moldAxis(), at: moldAt(), quarters: $('mquad').checked, keyD: +$('mkey').value || 6, clr: Math.max(0, +$('mclr').value || 0),
+    sprueD: +$('msprue').value || 8, vents: Math.max(0, Math.round(+$('mvents').value || 0)), ventD: 2.5 });
+  function syncMoldSlider() {
+    if (!st.bb) return; const k = moldAxis(), L = st.bb.size[k], el = $('mat');
+    el.min = (L * 0.03).toFixed(2); el.max = (L * 0.97).toFixed(2); el.value = moldAt().toFixed(2);
+    $('matOut').textContent = fmt(moldAt()) + ' mm';
+    $('matHint').textContent = st.moldAt[k] == null ? 'At the model’s widest section' : `${'XYZ'[k]} = ${fmt(moldAt())} of ${fmt(L)} mm`;
+  }
 
   function jointHint() {
     const t = jtype();
@@ -140,7 +156,15 @@
     disposeGroup(gPlanes); const cb = curBB(); if (!cb || st.result) return;
     const cols = ['--ax-x', '--ax-y', '--ax-z'];
     const list = [];
-    if (adaptive()) { if (st.plan) for (const n of S.treeCuts(st.plan.tree)) list.push({ k: n.k, c: n.c, mn: n.bb.min, mx: n.bb.max, pad: 3 }); }
+    if (moldOn()) {
+      // ghost of the mold block, plus its parting plane(s)
+      const geo = new THREE.BoxGeometry(cb.size[0], cb.size[1], cb.size[2]);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: new THREE.Color(css('--muted') || '#888') }));
+      edges.position.set((cb.min[0] + cb.max[0]) / 2, (cb.min[1] + cb.max[1]) / 2, (cb.min[2] + cb.max[2]) / 2); gPlanes.add(edges);
+      list.push({ k: moldAxis(), c: moldAt(), mn: cb.min, mx: cb.max, pad: 0 });
+      if ($('mquad').checked) { const o = [0, 1, 2].filter(q => q !== moldAxis()), k2 = st.bb.size[o[0]] >= st.bb.size[o[1]] ? o[0] : o[1]; if (st.moldWide[k2] == null) st.moldWide[k2] = Mold.autoParting(st.work, k2); list.push({ k: k2, c: st.moldWide[k2], mn: cb.min, mx: cb.max, pad: 0 }); }
+    }
+    else if (adaptive()) { if (st.plan) for (const n of S.treeCuts(st.plan.tree)) list.push({ k: n.k, c: n.c, mn: n.bb.min, mx: n.bb.max, pad: 3 }); }
     else for (let k = 0; k < 3; k++) for (const c of st.cuts[k]) list.push({ k, c, mn: [0, 0, 0], mx: cb.size, pad: 12 });
     for (const { k, c, mn, mx, pad } of list) {
       const u = (k + 1) % 3, v = (k + 2) % 3;
@@ -202,7 +226,9 @@
       st.wallApplied = w;
       if (st.shell) $('shellInfo').textContent = `Shell: ${fmt(w)} mm wall, about ${Math.round(st.shell.removed * 100)}% less plastic than solid.`;
     } else $('shellInfo').textContent = '';
-    st.work = m; st.bb = S.bbox(m); st.plan = null; st.rebuilding = false;
+    st.work = m; st.bb = S.bbox(m); st.plan = null; st.rebuilding = false; st.moldWide = [null, null, null];
+    const mk = [st.baseId, R.join(','), f].join('|'); if (st.moldFor !== mk) { st.moldAt = [null, null, null]; st.moldFor = mk; } // a moved plane only makes sense for the same pose
+    syncMoldSlider();
     if (replan !== false) autoPlan();
     clearResult(); renderDims(); renderAxes(); showModel(); rebuildPlanes(); buildGrid(); buildBedBox(); frame();
     if (adaptive()) schedulePlan();
@@ -263,7 +289,7 @@
     $('stalePill').hidden = true;
   }
   function markStale() {
-    if (st.result) { $('stalePill').hidden = false; st.stale = true; $('split').classList.add('primary'); $('export').classList.remove('primary'); }
+    if (st.result) { $('stalePill').querySelector('.stale').textContent = st.result.mold ? 'Settings changed — make the mold again' : 'Settings changed — split again'; $('stalePill').hidden = false; st.stale = true; $('split').classList.add('primary'); $('export').classList.remove('primary'); }
   }
 
   function renderDims() {
@@ -301,6 +327,7 @@
 
   function renderEst() {
     if (!st.bb) return;
+    if (moldOn()) { renderMoldSum(); return; }
     if (adaptive()) {
       $('est').innerHTML = '';
       const pl = st.plan;
@@ -328,6 +355,7 @@
   // ---------- split ----------
   async function runSplit() {
     st.splitArm = 0;
+    if (moldOn()) return runMold();
     if (st.rebuilding || st.planning || (adaptive() && !st.plan && st.work)) { st.autoSplit = true; toast('Splitting as soon as the plan is ready.'); return; }
     if (!st.work || st.busy) return;
     st.busy = true; $('busy').hidden = false; $('busyText').textContent = 'Splitting…'; $('busyBar').style.width = '0%';
@@ -413,7 +441,8 @@
 
   function renderParts() {
     const list = $('parts'), sum = $('summary'), warns = $('warns'); list.innerHTML = ''; sum.innerHTML = ''; warns.innerHTML = '';
-    if (!st.result) { $('partsaux').textContent = ''; sum.innerHTML = '<span class="hint">Set the cuts, then press Split model.</span>'; return; }
+    if (!st.result) { $('partsaux').textContent = ''; sum.innerHTML = `<span class="hint">${moldOn() ? 'Set up the mold, then press Make mold.' : 'Set the cuts, then press Split model.'}</span>`; return; }
+    if (st.result.mold) { renderMoldParts(list, sum, warns); return; }
     const P = st.parts, bad = P.filter(p => !p.fits).length, J = st.result.joint;
     $('partsaux').textContent = `${P.length} part${P.length === 1 ? '' : 's'}`;
     const jn = J.type === 'peg' ? 'peg joints' : J.type === 'dowel' ? 'dowel pins needed' : '';
@@ -436,6 +465,113 @@
     });
   }
   function bedName() { const b = BEDS.find(x => x[0] === bedSel.value); return b && b[2] ? b[1].replace('Bambu Lab ', '') : bed().join('×') + ' mm'; }
+
+  // ---------- mold ----------
+  function applyAppMode() {
+    const m = moldOn();
+    document.querySelectorAll('.split-only').forEach(el => { el.hidden = m || (el.id === 'shellFields' && !$('shell').checked); });
+    document.querySelectorAll('.mold-only').forEach(el => { el.hidden = !m; });
+    $('export').textContent = m ? 'Download mold (.zip)' : 'Download parts (.zip)';
+    $('busyText').textContent = m ? 'Making the mold…' : 'Splitting…';
+    try { history.replaceState(null, '', m ? '#mold' : location.pathname + location.search); } catch (e) {}
+  }
+  function appChanged() {
+    applyAppMode(); clearResult();
+    if (moldOn()) { st.planToken++; st.planning = false; $('busy').hidden = true; loadManifold().catch(() => {}); }
+    if (st.name === SAMPLE && +$('scale').value === (moldOn() ? 100 : 25)) { $('scale').value = sampleScale(); rebuildWork(); return; }
+    if ($('shell').checked) { rebuildWork(); return; } // the shell only applies to splitting, so the work mesh changes
+    syncMoldSlider(); renderAxes(); showModel(); rebuildPlanes(); buildGrid(); buildBedBox(); frame(); renderEst();
+    if (adaptive() && !st.plan) schedulePlan();
+  }
+  // a mold part prints in one fixed way (parting face up), so check that footprint and height
+  function moldFits(m, print) { const z = S.bbox(S.orientForPrint(m, print)).size, b = bed(); return z[2] <= b[2] + 0.01 && ((z[0] <= b[0] + 0.01 && z[1] <= b[1] + 0.01) || (z[0] <= b[1] + 0.01 && z[1] <= b[0] + 0.01)); }
+  function renderMoldSum() {
+    const el = $('moldsum'); if (!el || !st.bb) return;
+    const bs = moldBB().size, ml = S.volume(st.work) / 1000;
+    const n = $('mquad').checked ? 4 : 2;
+    $('moldaux').textContent = `${n} parts`;
+    el.innerHTML = `<div class="big">${fmt(ml, ml < 10 ? 1 : 0)} mL <small>to fill the model, plus a little for the funnel</small></div>` +
+      `<div class="sub">Block ${fmt(bs[0], 0)} × ${fmt(bs[1], 0)} × ${fmt(bs[2], 0)} mm, cut at ${'XYZ'[moldAxis()]} = ${fmt(moldAt())} mm</div>`;
+  }
+  async function runMold() {
+    st.splitArm = 0;
+    if (st.rebuilding) { st.autoSplit = true; return; }
+    if (!st.work || st.busy) return;
+    st.busy = true; $('busy').hidden = false; $('busyText').textContent = 'Making the mold…'; $('busyBar').style.width = '30%';
+    $('busySub').textContent = `Cutting the cavity from ${(st.work.idx.length / 3).toLocaleString()} triangles`;
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      let MF; try { MF = await loadManifold(); } catch (e) { throw new Error('Couldn\'t load the geometry engine. Check your connection and try again.'); }
+      $('busyBar').style.width = '60%'; await new Promise(r => setTimeout(r, 20));
+      const o = moldOpts(), r = Mold.make(st.work, o, MF);
+      if (!r.ok) { toast(r.note); return; }
+      const names = r.parts.length === 2 ? { '-1': 'A_bottom', '1': 'B_top' } : null;
+      const side = (q, s) => q === 2 ? (s < 0 ? 'bottom' : 'top') : q === 0 ? (s < 0 ? 'left' : 'right') : (s < 0 ? 'front' : 'back');
+      const parts = r.parts.map((p, i) => {
+        const bb = S.bbox(p.mesh), label = p.sg.map((s, j) => side(r.planes[j].k, s)).join('_');
+        return { mesh: p.mesh, dir: p.dir, bb, vol: p.vol, print: p.print, keys: p.keys, sockets: p.sockets, joints: p.keys + p.sockets, pegs: 0, holes: 0,
+          name: names && r.planes[0].k === 2 ? names[p.sg[0]] : 'ABCD'[i] + '_' + label, fits: moldFits(p.mesh, p.print), loose: S.solidComponents(p.mesh).length - 1 };
+      });
+      st.parts = parts; st.sel = -1; st.stale = false;
+      st.result = { mold: r, joint: { type: 'mold' }, open: 0, connectors: 0, pins: 0 };
+      disposeGroup(gModel); disposeGroup(gPlanes); drawParts(); renderParts(); buildBedBox();
+      emit('bedsplit:split', { parts: parts.length, joint: 'mold', pins: 0, name: st.name });
+      $('stalePill').hidden = true; $('export').disabled = !parts.length; $('export').classList.add('primary');
+    } catch (e) {
+      console.error(e); toast('Making the mold failed: ' + (e && e.message ? e.message : e));
+    } finally { st.busy = false; $('busy').hidden = true; }
+  }
+  function renderMoldParts(list, sum, warns) {
+    const P = st.parts, r = st.result.mold, bad = P.filter(p => !p.fits).length;
+    $('partsaux').textContent = `${P.length} part${P.length === 1 ? '' : 's'}`;
+    const ml = r.cavityVol / 1000, chan = r.channelVol / 1000;
+    sum.innerHTML = (bad ? `<span class="chip bad">${bad} too big for bed</span>` : `<span class="chip ok">all fit ${escapeHtml(bedName())}</span>`) +
+      `<span class="chip note">${r.keys.length} key${r.keys.length === 1 ? '' : 's'}</span>` +
+      `<span class="chip note">${r.vents.length} vent${r.vents.length === 1 ? '' : 's'}</span>` +
+      `<span class="chip note">≈ ${fmt(ml + chan, 0)} mL to pour</span>`;
+    if (bad) warns.insertAdjacentHTML('beforeend', `<p class="warn">Red parts don’t fit the bed with the parting face up. Try a thinner wall, the other parting plane, cutting into 4 parts, or scaling the model down.</p>`);
+    const loose = P.reduce((a, p) => a + p.loose, 0);
+    if (loose) warns.insertAdjacentHTML('beforeend', `<p class="note">${loose} loose core piece${loose > 1 ? 's' : ''}: part of the mold is completely surrounded by the model, so it isn’t attached to the block. Glue it in place with a dab of CA before casting, or print it and position it by hand.</p>`);
+    if (!r.vents.length && $('mvents').value > 0) warns.insertAdjacentHTML('beforeend', `<p class="note">No second high point found, so the funnel is the only way out for air. Tap the mold after pouring to lift bubbles.</p>`);
+    if (r.keys.length < (r.planes.length === 1 ? 4 : 8)) warns.insertAdjacentHTML('beforeend', `<p class="note">Some keys were left out because they would hit the funnel, a vent or the other parting plane.</p>`);
+    P.forEach((p, i) => {
+      const b = document.createElement('button'); b.className = 'part'; b.dataset.i = i; b.type = 'button';
+      const z = S.bbox(S.orientForPrint(p.mesh, p.print)).size;
+      b.innerHTML = `<span class="sw" style="background:${p.color || PALETTE[i % PALETTE.length]}"></span><span class="nm">${p.name}<small>${fmt(z[0], 0)}×${fmt(z[1], 0)}×${fmt(z[2], 0)} · ${p.keys ? `${p.keys} key${p.keys > 1 ? 's' : ''}` : ''}${p.keys && p.sockets ? ', ' : ''}${p.sockets ? `${p.sockets} socket${p.sockets > 1 ? 's' : ''}` : ''}</small></span><span class="chip ${p.fits ? 'ok' : 'bad'}">${p.fits ? 'fits' : 'too big'}</span>`;
+      b.addEventListener('click', () => { st.sel = st.sel === i ? -1 : i; applySel(); });
+      list.appendChild(b);
+    });
+  }
+  function moldText() {
+    const r = st.result.mold, s = st.bb.size, b = bed(), bs = r.blockSize, ml = r.cavityVol / 1000, chan = r.channelVol / 1000;
+    const L = [];
+    L.push('BEDSPLIT MOLD SHEET', '='.repeat(19), '');
+    L.push(`Source: ${st.name}`, `Model size: ${fmt(s[0])} x ${fmt(s[1])} x ${fmt(s[2])} mm`, `Mold block: ${fmt(bs[0])} x ${fmt(bs[1])} x ${fmt(bs[2])} mm, ${fmt(r.wall)} mm walls`, `Printer bed: ${b.join(' x ')} mm (${bedName()})`, '');
+    L.push(`Parting plane${r.planes.length > 1 ? 's' : ''}: ${r.planes.map(p => `${'XYZ'[p.k]} = ${fmt(p.c)} mm`).join(', ')} (from the model's min corner).`);
+    L.push(`Keys: ${r.keys.length} hemispheres, ${fmt(r.keyD)} mm across, sockets +${fmt(r.clr, 2)} mm. A part with keys sits in the sockets of its neighbour, so the halves can't shift.`);
+    L.push(`Funnel: ${fmt(r.sprue.rBot * 2)} mm where it meets the model, ${fmt(r.sprue.rTop * 2)} mm at the top of the block.`);
+    L.push(`Air vents: ${r.vents.length}${r.vents.length ? `, ${fmt(r.vents[0].rBot * 2)} mm, over the other high points of the model` : ''}.`, '');
+    L.push('HOW MUCH TO MIX', `  Model: ${fmt(ml, 1)} mL. With the funnel and vents: about ${fmt(ml + chan, 1)} mL.`, `  Mix about ${fmt((ml + chan) * 1.15, 0)} mL to allow for what stays in the cup.`, '  For resin sold by weight, multiply mL by its density (epoxy ~1.1 g/mL, silicone ~1.1-1.2 g/mL).', '');
+    L.push('PRINTING',
+      '  Print every part as it is in print_ready/: parting face up, so the cavity is an open pit and needs no supports.',
+      '  Use 3-4 walls and 20%+ infill so the mold doesn\'t flex. Finer layers give a smoother cast.',
+      '  PETG or PLA both work. PLA softens around 55-60 C, so use a slow-curing epoxy for big pours (fast epoxy gets hot).', '');
+    L.push('CASTING',
+      '  1. Seal and release the cavity. Brush on a thin coat of XTC-3D or a few coats of clear spray, sand smooth if you like,',
+      '     then apply mold release (Ease Release 200 or similar). Epoxy bonds to bare plastic, so never skip the release.',
+      '  2. Platinum (addition-cure) silicone can fail to cure on some resins and paints. Test a dab on the sealed surface first,',
+      '     or use tin-cure silicone, which isn\'t fussy.',
+      '  3. Close the mold: keys into sockets. Clamp it or wrap it tightly with rubber bands, and seal the seam outside with',
+      '     clay, hot glue or tape so it doesn\'t leak.',
+      '  4. Stand the mold funnel-up and pour slowly in a thin stream into one side of the funnel. Stop when resin shows in',
+      '     every vent and the funnel is full.',
+      '  5. Tap the mold on the table for a minute to lift bubbles. A pressure pot gives bubble-free casts if you have one.',
+      '  6. Wait the full cure time, then open the mold and trim the funnel and vent stubs flush.', '');
+    L.push('PART              PRINT SIZE (mm)            KEYS  SOCKETS  FITS');
+    for (const p of st.parts) { const z = S.bbox(S.orientForPrint(p.mesh, p.print)).size; L.push(`${p.name.padEnd(18)}${`${fmt(z[0])} x ${fmt(z[1])} x ${fmt(z[2])}`.padEnd(27)}${String(p.keys).padEnd(6)}${String(p.sockets).padEnd(9)}${p.fits ? 'yes' : 'NO'}`); }
+    L.push('', 'Files in print_ready/ are turned parting-face-up and sit on z = 0. Files in assembled_position/ keep every part where it sits in the closed mold.');
+    return L.join('\n') + '\n';
+  }
 
   // ---------- export ----------
   function saveBlob(filename, blob) {
@@ -466,6 +602,13 @@
       }
       const inner = fflate.zipSync({ '[Content_Types].xml': enc.encode(S.CT3MF), '_rels/.rels': enc.encode(S.RELS3MF), '3D/3dmodel.model': enc.encode(S.model3mf(items)) }, { level: 6 });
       files[`${base}_all_parts.3mf`] = [inner, { level: 0 }];
+      if (st.result.mold) {
+        files['MOLD_INSTRUCTIONS.txt'] = enc.encode(moldText());
+        const zip = fflate.zipSync(files, { level: 6 });
+        saveBlob(`${base}_mold.zip`, new Blob([zip], { type: 'application/zip' }));
+        emit('bedsplit:export', { parts: st.parts.length, mold: true });
+        toast(`Saved ${base}_mold.zip`); return;
+      }
       const J = st.result.joint;
       let pinsLine = '';
       if (st.result.pins) {
@@ -573,11 +716,13 @@
     finally { $('busy').hidden = true; }
   }
 
+  // the sample knot is 350 mm across: fine for splitting, but its mold would take 6 litres of resin
+  const SAMPLE = 'sample-torus-knot.stl', sampleScale = () => moldOn() ? 25 : 100;
   function loadSample() {
     const g = new THREE.TorusKnotGeometry(105, 34, 360, 44, 2, 3);
-    st.base = S.fromGeometry(g); st.baseId = (st.baseId || 0) + 1; st.name = 'sample-torus-knot.stl'; st.R = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    st.base = S.fromGeometry(g); st.baseId = (st.baseId || 0) + 1; st.name = SAMPLE; st.R = [1, 0, 0, 0, 1, 0, 0, 0, 1];
     if (S.volume(st.base) < 0) st.base = S.flip(st.base);
-    $('scale').value = 100; $('units').value = '1';
+    $('scale').value = sampleScale(); $('units').value = '1';
     rebuildWork();
   }
 
@@ -607,12 +752,23 @@
   $('dkeys').addEventListener('change', () => { if (jtype() === 'dovetail') replanAll(); });
   $('jlen').addEventListener('change', () => { if (jtype() === 'peg') replanAll(); else markStale(); renderEst(); });
   $('split').addEventListener('click', runSplit);
+  $('makeMold').addEventListener('click', runMold);
+  document.querySelectorAll('input[name=app]').forEach(r => r.addEventListener('change', appChanged));
+  const moldPlaneChanged = () => { syncMoldSlider(); clearResult(); renderEst(); rebuildPlanes(); buildGrid(); buildBedBox(); };
+  $('maxis').addEventListener('change', moldPlaneChanged);
+  $('mat').addEventListener('input', () => { st.moldAt[moldAxis()] = +$('mat').value; moldPlaneChanged(); });
+  $('mauto').addEventListener('click', () => { st.moldAt[moldAxis()] = null; moldPlaneChanged(); });
+  $('mquad').addEventListener('change', moldPlaneChanged);
+  $('mwall').addEventListener('change', () => { clearResult(); renderEst(); rebuildPlanes(); buildGrid(); buildBedBox(); frame(); });
+  for (const id of ['mkey', 'mclr', 'msprue', 'mvents']) $(id).addEventListener('change', () => { markStale(); renderEst(); });
   $('export').addEventListener('click', exportZip);
   $('explode').addEventListener('input', () => { $('explodeOut').textContent = $('explode').value + ' mm'; if (st.result) { const ex = +$('explode').value; gParts.children.forEach(m => { const c = st.parts[m.userData.i].dir; m.position.set(c[0] * ex, c[1] * ex, c[2] * ex); }); buildBedBox(); } });
   $('showBed').addEventListener('change', () => { gBed.visible = $('showBed').checked; });
   $('showPlanes').addEventListener('change', () => { gPlanes.visible = $('showPlanes').checked; });
 
   // ---------- start ----------
+  if (location.hash === '#mold') $('app-mold').checked = true;
+  applyAppMode();
   jointHint(); bedChanged(); resize(); themeColors();
   st.autoSplit = true;
   loadSample();

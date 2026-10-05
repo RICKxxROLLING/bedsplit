@@ -148,3 +148,4 @@ main.view canvas{display:block;width:100%;height:100%;touch-action:none}
 .sitefoot p{margin:6px 0 0}
 .seg.four{grid-template-columns:repeat(4,1fr)}
 label.check.wide{grid-column:1/-1}
+.cut.mcut{padding-left:0}
