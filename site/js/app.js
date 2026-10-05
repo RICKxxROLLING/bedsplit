@@ -16,7 +16,11 @@
   const PALETTE = ['#E07A5F', '#3D85B8', '#6FB08F', '#E9B949', '#9C7FC4', '#4FB0AA', '#D6823C', '#7F93A6', '#C4677F', '#8DA84A'];
 
   const emit = (name, detail) => { try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch (e) {} };
-  const st = { base: null, name: 'sample', R: [1, 0, 0, 0, 1, 0, 0, 0, 1], work: null, bb: null, cuts: [[], [], []], result: null, parts: [], sel: -1, stale: false, busy: false, plan: null, planToken: 0, planning: false, moldAt: [null, null, null], moldWide: [null, null, null] };
+  const st = { base: null, name: 'sample', R: [1, 0, 0, 0, 1, 0, 0, 0, 1], work: null, bb: null, cuts: [[], [], []], result: null, parts: [], sel: -1, stale: false, busy: false, plan: null, planToken: 0, planning: false, moldAt: [null, null, null], moldWide: [null, null, null], job: 0, queued: null };
+  // a split or mold job stops at its next pause once the mode changes; a job asked for meanwhile runs when it has stopped
+  const CANCEL = { cancelled: true };
+  const check = (job, mold) => { if (job !== st.job || moldOn() !== mold) throw CANCEL; };
+  function endJob() { st.busy = false; $('busy').hidden = true; const q = st.queued; st.queued = null; if (q) setTimeout(q, 0); }
   const mode = () => document.querySelector('input[name=mode]:checked').value;
   const moldOn = () => document.querySelector('input[name=app]:checked').value === 'mold';
   const adaptive = () => mode() === 'adaptive' && !moldOn();
@@ -356,18 +360,20 @@
   async function runSplit() {
     st.splitArm = 0;
     if (moldOn()) return runMold();
+    if (st.busy) { st.queued = runSplit; return; }
     if (st.rebuilding || st.planning || (adaptive() && !st.plan && st.work)) { st.autoSplit = true; toast('Splitting as soon as the plan is ready.'); return; }
-    if (!st.work || st.busy) return;
+    if (!st.work) return;
+    const job = ++st.job;
     st.busy = true; $('busy').hidden = false; $('busyText').textContent = 'Splitting…'; $('busyBar').style.width = '0%';
     const total = adaptive() ? (st.plan ? S.treeCuts(st.plan.tree).length : 0) : st.cuts[0].length + st.cuts[1].length + st.cuts[2].length;
     $('busySub').textContent = total ? `${total} cut${total > 1 ? 's' : ''} across ${(curMesh().idx.length / 3).toLocaleString()} triangles` : 'Model already fits — nothing to cut';
-    await new Promise(r => setTimeout(r, 30));
     try {
+      await new Promise(r => setTimeout(r, 30)); check(job, false);
       const J = joint(); const parts = []; let res;
       if (adaptive()) {
         const pl = st.plan; if (!pl) throw new Error('No plan yet.');
         const g = S.execTree(pl.work, pl.tree, FLAT); let r;
-        while (!(r = g.next()).done) { $('busyBar').style.width = (r.value * 90).toFixed(0) + '%'; await new Promise(res2 => setTimeout(res2, 0)); }
+        while (!(r = g.next()).done) { $('busyBar').style.width = (r.value * 90).toFixed(0) + '%'; await new Promise(res2 => setTimeout(res2, 0)); check(job, false); }
         res = r.value;
         // safety net: re-plan any part that still came out too big
         const out = [];
@@ -388,7 +394,7 @@
         parts.forEach((p, i) => { p.name = 'P' + String(i + 1).padStart(2, '0'); });
         st.result = { open: res.open, joint: J, adaptive: true, plan: st.plan };
       } else {
-        res = await S.splitAllAsync(st.work, st.cuts, FLAT, (f) => { $('busyBar').style.width = (f * 100).toFixed(0) + '%'; });
+        res = await S.splitAllAsync(st.work, st.cuts, FLAT, (f) => { $('busyBar').style.width = (f * 100).toFixed(0) + '%'; check(job, false); });
         for (const pc of res.pieces) {
           const pieces = S.solidComponents(pc.mesh).filter(cm => Math.abs(S.volume(cm)) >= 1);
           const base = `X${pc.cell[0] + 1}-Y${pc.cell[1] + 1}-Z${pc.cell[2] + 1}`;
@@ -402,25 +408,28 @@
       }
       // joints go on after all cuts: each part keeps one peg-free face to print on
       if (J.type === 'dovetail') {
-        $('busyText').textContent = 'Adding dovetails…'; $('busySub').textContent = 'Planning the assembly order and cutting rails'; $('busyBar').style.width = '92%'; await new Promise(r => setTimeout(r, 20));
+        $('busyText').textContent = 'Adding dovetails…'; $('busySub').textContent = 'Planning the assembly order and cutting rails'; $('busyBar').style.width = '92%'; await new Promise(r => setTimeout(r, 20)); check(job, false);
         let MF; try { MF = await loadManifold(); } catch (e) { throw new Error('Couldn\'t load the geometry engine for dovetails. Check your connection and try again.'); }
+        check(job, false);
         const fitsUsable = (d, loose) => { const a = d.slice().sort((x, y) => x - y), b = (loose ? bed().map(x => x - 2) : usable()).slice().sort((x, y) => x - y); return a.every((x, i) => x <= b[i] + 0.01); };
         const jr = S.addDovetails(parts.map(p => p.mesh), res.planes, J, fitsUsable, MF);
         parts.forEach((p, i) => { const f = jr.info[i]; p.mesh = jr.meshes[i]; p.bb = S.bbox(p.mesh); p.fits = fitsBed(p.bb.size); p.rails = f.rails; p.slots = f.slots; p.keySlots = f.keySlots; p.joints = f.rails + f.slots + f.keySlots; p.pegs = 0; p.holes = 0; p.print = f.print; });
         Object.assign(st.result, { connectors: jr.connectors, pins: 0, rails: jr.rails, keys: jr.keys, steps: jr.steps, skipped: jr.skipped });
       } else if (J.type !== 'flat') {
-        $('busyText').textContent = 'Adding joints…'; $('busyBar').style.width = '92%'; await new Promise(r => setTimeout(r, 20));
+        $('busyText').textContent = 'Adding joints…'; $('busyBar').style.width = '92%'; await new Promise(r => setTimeout(r, 20)); check(job, false);
         const jr = S.addJoints(parts.map(p => p.mesh), res.planes, J, fitsBed);
         parts.forEach((p, i) => { p.mesh = jr.meshes[i]; p.bb = S.bbox(p.mesh); p.fits = fitsBed(p.bb.size); p.joints = jr.info[i].pegs + jr.info[i].holes; p.pegs = jr.info[i].pegs; p.holes = jr.info[i].holes; p.print = jr.info[i].print; });
         st.result.connectors = jr.connectors; st.result.pins = jr.pins; st.result.pinLens = jr.pinLens;
       } else { st.result.connectors = 0; st.result.pins = 0; parts.forEach(p => { p.joints = 0; p.pegs = 0; p.holes = 0; p.print = null; }); }
+      check(job, false);
       st.parts = parts; st.sel = -1; st.stale = false;
       disposeGroup(gModel); disposeGroup(gPlanes); drawParts(); renderParts(); buildBedBox();
       emit('bedsplit:split', { parts: parts.length, joint: J.type, pins: st.result.pins || 0, name: st.name });
       $('stalePill').hidden = true; $('export').disabled = !parts.length; $('export').classList.add('primary'); $('split').classList.remove('primary');
     } catch (e) {
+      if (e === CANCEL) { if (st.result && !st.result.mold && moldOn()) clearResult(); return; }
       console.error(e); toast('Splitting failed: ' + (e && e.message ? e.message : e));
-    } finally { st.busy = false; $('busy').hidden = true; }
+    } finally { endJob(); }
   }
 
   function drawParts() {
@@ -476,9 +485,10 @@
     try { history.replaceState(null, '', m ? '#mold' : location.pathname + location.search); } catch (e) {}
   }
   function appChanged() {
+    st.job++; st.queued = null; // whatever was running belongs to the other mode
     applyAppMode(); clearResult();
-    if (moldOn()) { st.planToken++; st.planning = false; $('busy').hidden = true; loadManifold().catch(() => {}); }
-    if (st.name === SAMPLE && +$('scale').value === (moldOn() ? 100 : 25)) { $('scale').value = sampleScale(); rebuildWork(); return; }
+    if (moldOn()) { st.planToken++; st.planning = false; if (!st.busy) $('busy').hidden = true; loadManifold().catch(() => {}); }
+    if (st.name === SAMPLE && +$('scale').value === (moldOn() ? 100 : 25)) { $('scale').value = sampleScale(); st.autoSplit = true; rebuildWork(); return; }
     if ($('shell').checked) { rebuildWork(); return; } // the shell only applies to splitting, so the work mesh changes
     syncMoldSlider(); renderAxes(); showModel(); rebuildPlanes(); buildGrid(); buildBedBox(); frame(); renderEst();
     if (adaptive() && !st.plan) schedulePlan();
@@ -496,13 +506,15 @@
   async function runMold() {
     st.splitArm = 0;
     if (st.rebuilding) { st.autoSplit = true; return; }
-    if (!st.work || st.busy) return;
+    if (st.busy) { st.queued = runMold; $('busyText').textContent = 'Finishing up, then making the mold…'; return; }
+    if (!st.work) return;
+    const job = ++st.job;
     st.busy = true; $('busy').hidden = false; $('busyText').textContent = 'Making the mold…'; $('busyBar').style.width = '30%';
     $('busySub').textContent = `Cutting the cavity from ${(st.work.idx.length / 3).toLocaleString()} triangles`;
-    await new Promise(r => setTimeout(r, 30));
     try {
+      await new Promise(r => setTimeout(r, 30));
       let MF; try { MF = await loadManifold(); } catch (e) { throw new Error('Couldn\'t load the geometry engine. Check your connection and try again.'); }
-      $('busyBar').style.width = '60%'; await new Promise(r => setTimeout(r, 20));
+      $('busyBar').style.width = '60%'; await new Promise(r => setTimeout(r, 20)); check(job, true);
       const o = moldOpts(), r = Mold.make(st.work, o, MF);
       if (!r.ok) { toast(r.note); return; }
       const names = r.parts.length === 2 ? { '-1': 'A_bottom', '1': 'B_top' } : null;
@@ -518,8 +530,9 @@
       emit('bedsplit:split', { parts: parts.length, joint: 'mold', pins: 0, name: st.name });
       $('stalePill').hidden = true; $('export').disabled = !parts.length; $('export').classList.add('primary');
     } catch (e) {
+      if (e === CANCEL) return;
       console.error(e); toast('Making the mold failed: ' + (e && e.message ? e.message : e));
-    } finally { st.busy = false; $('busy').hidden = true; }
+    } finally { endJob(); }
   }
   function renderMoldParts(list, sum, warns) {
     const P = st.parts, r = st.result.mold, bad = P.filter(p => !p.fits).length;
