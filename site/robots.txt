@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bedsplit.riley-hire.workers.dev/sitemap.xml

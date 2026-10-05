@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bedsplit: split STL files to fit your 3D printer bed</title>
+<meta name="description" content="Free online tool that cuts oversized STL, OBJ and 3MF models into parts that fit your 3D printer, with pegs or dowel joints. Runs in your browser; files never upload.">
+<link rel="canonical" href="https://bedsplit.riley-hire.workers.dev/">
+<meta property="og:title" content="Bedsplit: split big models to fit your printer">
+<meta property="og:description" content="Cut oversized STL, OBJ and 3MF models into printable parts with alignment joints. Free, in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bedsplit.riley-hire.workers.dev/">
+<meta name="theme-color" content="#D0530C">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/css/app.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Bedsplit","url":"https://bedsplit.riley-hire.workers.dev/","applicationCategory":"DesignApplication","operatingSystem":"Any (web browser)","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Cuts oversized 3D models into parts that fit your printer bed, with alignment pegs or dowel holes."}</script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Bed<b>split</b></h1><p>Cut oversized models into parts that fit your printer</p></div>
+    <nav class="topnav" aria-label="Site">
+      <a href="/guides/">Guides</a>
+      <a href="/about.html">About</a>
+      <a href="#" id="donate" class="donate" hidden target="_blank" rel="noopener">Support Bedsplit</a>
+    </nav>
+    <div class="filemeta" id="filemeta">Loading…</div>
+  </header>
+
+  <aside class="panel">
+    <section class="sec">
+      <h2>Model</h2>
+      <label class="drop" for="file">
+        <strong>Open STL, OBJ or 3MF</strong>
+        <span>Or drop a file anywhere on the page. Files stay in your browser.</span>
+      </label>
+      <input type="file" id="file" accept=".stl,.obj,.3mf" hidden>
+      <div class="dims" id="dims"></div>
+      <div class="fields">
+        <label class="f">Scale %<input type="number" id="scale" value="100" min="1" step="1"></label>
+        <label class="f">File units<select id="units"><option value="1">millimeters</option><option value="10">centimeters</option><option value="25.4">inches</option></select></label>
+      </div>
+      <div class="row">
+        <span class="hint" style="margin-right:auto">Rotate 90°</span>
+        <button id="rx" class="ax-x" title="Rotate 90° about X">X</button>
+        <button id="ry" class="ax-y" title="Rotate 90° about Y">Y</button>
+        <button id="rz" class="ax-z" title="Rotate 90° about Z">Z</button>
+        <button id="sample" title="Load the sample model">Sample</button>
+      </div>
+      <label class="check"><input type="checkbox" id="shell"> Hollow into a shell before splitting</label>
+      <div id="shellFields" style="display:grid;gap:8px" hidden>
+        <label class="f">Wall thickness, mm<input type="number" id="shellw" value="6" min="3" max="30" step="0.5"></label>
+        <p class="hint">Keeps a solid outer wall and removes the inside, so big models print as rings and panels instead of solid blocks. Joints shrink to fit inside the wall.</p>
+        <p class="hint" id="shellInfo"></p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Printer <span class="aux" id="bedaux"></span></h2>
+      <label class="f wide">Build volume<select id="bed"></select></label>
+      <div class="fields three">
+        <label class="f">X mm<input type="number" id="bx" min="20" step="1"></label>
+        <label class="f">Y mm<input type="number" id="by" min="20" step="1"></label>
+        <label class="f">Z mm<input type="number" id="bz" min="20" step="1"></label>
+      </div>
+      <label class="f">Safety margin per side, mm<input type="number" id="margin" value="3" min="0" step="0.5"></label>
+    </section>
+
+    <section class="sec">
+      <h2>Joints</h2>
+      <div class="seg four" role="radiogroup" aria-label="Joint type">
+        <label><input type="radio" name="jt" id="jt-peg" value="peg" checked><span>Pegs</span></label>
+        <label><input type="radio" name="jt" id="jt-dowel" value="dowel"><span>Dowels</span></label>
+        <label><input type="radio" name="jt" id="jt-dove" value="dovetail"><span>Dovetail</span></label>
+        <label><input type="radio" name="jt" id="jt-flat" value="flat"><span>Flat</span></label>
+      </div>
+      <p class="hint" id="jthint"></p>
+      <div class="fields" id="jfields">
+        <label class="f peg-only">Diameter, mm<input type="number" id="jd" value="8" min="2" step="0.5"></label>
+        <label class="f peg-only" id="jlenl">Peg length, mm<input type="number" id="jlen" value="10" min="2" step="0.5"></label>
+        <label class="f dove-only">Rail width, mm<input type="number" id="dw" value="10" min="4" step="0.5"></label>
+        <label class="f dove-only">Rail depth, mm<input type="number" id="dh" value="5" min="2" max="15" step="0.5"></label>
+        <label class="f">Clearance, mm<input type="number" id="jclr" value="0.2" min="0" step="0.05"></label>
+        <label class="f">Max per face<input type="number" id="jmax" value="3" min="1" max="8" step="1"></label>
+        <label class="f wide">Min. wall around joint, mm<input type="number" id="jwall" value="2.5" min="0.8" step="0.1"></label>
+        <label class="check wide dove-only"><input type="checkbox" id="dkeys"> Use separate slide-in keys for every seam</label>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Cuts <span class="aux" id="gridaux"></span></h2>
+      <div class="seg two" role="radiogroup" aria-label="Cut mode">
+        <label><input type="radio" name="mode" id="mode-adaptive" value="adaptive" checked><span>Fewest parts</span></label>
+        <label><input type="radio" name="mode" id="mode-grid" value="grid"><span>Even grid</span></label>
+      </div>
+      <div id="adaptivePanel" style="display:grid;gap:10px">
+        <p class="hint">Searches cut positions piece by piece, and optionally the model's angle, to reach the lowest part count. It spots empty space, so pieces that are already separate are never cut through air, and each part only needs to fit the bed in some orientation.</p>
+        <label class="check"><input type="checkbox" id="adrot" checked> Let it turn the model to save parts</label>
+        <div class="plan" id="plansum"></div>
+        <div class="upsell" id="upsell" hidden></div>
+      </div>
+      <div id="axes" class="axis-wrap" style="display:grid;gap:14px" hidden></div>
+      <div class="est" id="est"></div>
+      <button class="primary big" id="split">Split model</button>
+    </section>
+
+    <section class="sec" id="partsSec">
+      <h2>Parts <span class="aux" id="partsaux"></span></h2>
+      <div class="summary" id="summary"></div>
+      <div id="warns" style="display:grid;gap:6px"></div>
+      <div class="parts" id="parts"></div>
+      <button class="big" id="export" disabled>Download parts (.zip)</button>
+      <p class="hint">The zip holds one STL per part, a single 3MF with every part (press A in Bambu Studio to arrange across plates), printable pins or dovetail keys when needed, and an assembly sheet with the build order.</p>
+      <div class="supplies" id="supplies" hidden></div>
+    </section>
+    <section class="sec adsec" id="adSide" hidden aria-label="Advertisement"></section>
+    <footer class="sitefoot">
+      <a href="/guides/">Guides</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/licenses.html">Licenses</a>
+      <p>Your models never leave your computer. All splitting happens in your browser.</p>
+    </footer>
+  </aside>
+
+  <main class="view" id="view">
+    <div class="hud tl">
+      <div class="pill"><span class="mono" id="bedlabel"></span></div>
+      <div class="pill" id="stalePill" hidden><span class="stale">Settings changed — split again</span></div>
+    </div>
+    <div class="hud bl">
+      <div class="pill">
+        <label for="explode">Explode</label><input type="range" id="explode" min="0" max="80" value="24"><span class="mono" id="explodeOut">24 mm</span>
+      </div>
+      <div class="pill">
+        <label><input type="checkbox" id="showBed" checked> Bed</label>
+        <label><input type="checkbox" id="showPlanes" checked> Cut planes</label>
+      </div>
+    </div>
+    <div class="busy" id="busy" hidden><div class="box"><strong id="busyText">Splitting…</strong><div class="bar"><i id="busyBar"></i></div><span class="hint" id="busySub"></span></div></div>
+    <div class="toast" id="toast" hidden></div>
+  </main>
+</div>
+<div class="dropveil" id="veil" hidden>Drop to open</div>
+
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<script src="/vendor/STLLoader.js"></script>
+<script src="/vendor/OBJLoader.js"></script>
+<script src="/vendor/fflate.min.js"></script>
+<script src="/vendor/3MFLoader.js"></script>
+<script src="/config.js"></script>
+<script src="/js/splitter.js"></script>
+<script src="/js/monetize.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

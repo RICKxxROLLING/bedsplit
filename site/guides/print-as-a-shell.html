@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Printing big models as shells: rings instead of solid blocks | Bedsplit</title>
+<meta name="description" content="Hollow a large 3D model to a 5–10 mm wall before splitting, so it prints as rings and panels with alignment pegs built into the wall.">
+<link rel="canonical" href="https://bedsplit.riley-hire.workers.dev/guides/print-as-a-shell.html">
+<meta property="og:title" content="Printing big models as shells: rings instead of solid blocks | Bedsplit">
+<meta property="og:description" content="Hollow a large 3D model to a 5–10 mm wall before splitting, so it prints as rings and panels with alignment pegs built into the wall.">
+<meta property="og:url" content="https://bedsplit.riley-hire.workers.dev/guides/print-as-a-shell.html">
+<meta name="theme-color" content="#D0530C">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Bed<b>split</b></a>
+  <nav class="topnav" aria-label="Site">
+    <a href="/guides/">Guides</a>
+    <a href="/about.html">About</a>
+    <a href="#" id="donate" hidden target="_blank" rel="noopener">Support</a>
+    <a class="cta" href="/">Open the tool</a>
+  </nav>
+</header>
+<main class="page">
+<h1>Printing big models as shells</h1>
+<p class="lede">A 400 mm statue split into solid blocks can use kilograms of filament and days of print time. As a shell with a fixed wall thickness, the same model often needs a fraction of that.</p>
+
+<h2>What shell mode does</h2>
+<p>Tick <strong>Hollow into a shell before splitting</strong> and set a wall thickness. Bedsplit keeps a solid outer wall of that thickness and removes everything inside, then splits the shell. Each part comes out as a ring, a curved panel or an open cup, not a solid block.</p>
+<p>The wall is measured from the real surface, so it stays within a fraction of a millimetre of what you set, even on curved shapes.</p>
+
+<h2>Picking a wall thickness</h2>
+<table>
+  <thead><tr><th>Wall</th><th>Good for</th><th>Pegs that fit</th></tr></thead>
+  <tbody>
+    <tr><td class="num">5–6 mm</td><td>Display pieces, cosplay, props</td><td class="num">about 2–3 mm</td></tr>
+    <tr><td class="num">8 mm</td><td>Most large models: a good balance</td><td class="num">about 5 mm</td></tr>
+    <tr><td class="num">10–12 mm</td><td>Parts that get handled, outdoor pieces</td><td class="num">about 7 mm, or dovetails</td></tr>
+  </tbody>
+</table>
+
+<h2>Joints inside the wall</h2>
+<p>Pegs and dowel holes shrink to fit inside the wall, with at least 1 mm of plastic around every hole. They're placed along the middle of the ring so several pegs spread around each seam. Where the wall curves away from the cut, a peg gets shorter rather than breaking through the surface. Dovetails need a wall of about 9 mm or more.</p>
+
+<h2>Slicer settings</h2>
+<ul>
+  <li>The wall is already the strength, so a few perimeters plus normal infill works well. With 100% infill the wall prints fully solid.</li>
+  <li>Parts are cut open by the splits, so most have no inside roof. A part with a closed hollow inside, like the very top of a dome, has an inside ceiling. Print it opening-down, or turn on tree supports.</li>
+</ul>
+<div class="callout">
+  <p><strong>Try it on your model.</strong> Bedsplit runs in your browser, and your files never upload.</p>
+  <a class="btn" href="/">Open Bedsplit</a>
+</div>
+<div class="adslot" data-ad="guide" hidden></div>
+</main>
+<footer class="site">
+  <a href="/">Bedsplit</a> · <a href="/guides/">Guides</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/licenses.html">Licenses</a>
+</footer>
+<script src="/config.js"></script>
+<script src="/js/monetize.js"></script>
+</body>
+</html>

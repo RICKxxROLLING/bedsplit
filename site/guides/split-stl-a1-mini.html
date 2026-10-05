@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How to split an STL for the Bambu Lab A1 mini | Bedsplit</title>
+<meta name="description" content="Fit big models on the A1 mini’s 180 mm bed: pick a margin, let Bedsplit find the fewest cuts, and print parts that snap together.">
+<link rel="canonical" href="https://bedsplit.riley-hire.workers.dev/guides/split-stl-a1-mini.html">
+<meta property="og:title" content="How to split an STL for the Bambu Lab A1 mini | Bedsplit">
+<meta property="og:description" content="Fit big models on the A1 mini’s 180 mm bed: pick a margin, let Bedsplit find the fewest cuts, and print parts that snap together.">
+<meta property="og:url" content="https://bedsplit.riley-hire.workers.dev/guides/split-stl-a1-mini.html">
+<meta name="theme-color" content="#D0530C">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Bed<b>split</b></a>
+  <nav class="topnav" aria-label="Site">
+    <a href="/guides/">Guides</a>
+    <a href="/about.html">About</a>
+    <a href="#" id="donate" hidden target="_blank" rel="noopener">Support</a>
+    <a class="cta" href="/">Open the tool</a>
+  </nav>
+</header>
+<main class="page">
+<h1>How to split an STL for the Bambu Lab A1 mini</h1>
+<p class="lede">The A1 mini is a great printer with a small bed: 180 × 180 × 180 mm. Here's how to print models that are bigger than that.</p>
+
+<h2>1. Check whether you need to split at all</h2>
+<p>Before cutting anything, try rotating the model. A part that's 200 mm long fits diagonally on a 180 mm square bed if it's narrow enough, since the diagonal is about 254 mm. Tall, thin models often fit lying down. Bedsplit tries 36 angles for you and counts a part as fitting if it fits the bed in <em>any</em> orientation.</p>
+
+<h2>2. Set the printer and margin</h2>
+<p>Pick <strong>Bambu Lab A1 mini</strong> under Printer. Keep a safety margin of 2–3 mm per side, because the A1 mini's usable area shrinks a little when you use a brim, and parts right at the edge are more likely to lift.</p>
+
+<h2>3. Let Bedsplit find the fewest parts</h2>
+<p>"Fewest parts" mode tries cut positions one piece at a time and looks for empty space, so separate pieces of the model are never cut through air. It's usually several parts better than an even grid. Use "Even grid" only when you want uniform blocks, for example for a wall panel.</p>
+<p>The plan box shows how many parts it found and how many an even grid would need, so you can compare. Hollow and branching models usually save the most.</p>
+
+<h2>4. Choose joints</h2>
+<p>Pegs are the default and the easiest to use. For small cut faces, drop the peg diameter to 5–6 mm. See <a href="/guides/pegs-vs-dowels.html">pegs vs dowels</a> for details.</p>
+
+<h2>5. Print</h2>
+<p>The zip includes a single 3MF with every part already turned flat side down. Open it in Bambu Studio and press <code>A</code> to arrange the parts across plates. On the A1 mini, PLA at 0.2 mm layers with 3 walls gives strong pegs.</p>
+
+<div class="callout">
+  <p><strong>Try it on your model.</strong> Bedsplit runs in your browser, and your files never upload.</p>
+  <a class="btn" href="/">Open Bedsplit</a>
+</div>
+<div class="adslot" data-ad="guide" hidden></div>
+</main>
+<footer class="site">
+  <a href="/">Bedsplit</a> · <a href="/guides/">Guides</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/licenses.html">Licenses</a>
+</footer>
+<script src="/config.js"></script>
+<script src="/js/monetize.js"></script>
+</body>
+</html>
